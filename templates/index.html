@@ -7,12 +7,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    {% load static %}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <!-- Main Menu Screen -->
-    <div id="menuScreen" class="screen">
+    <!-- Authentication Screen -->
+    <div id="authScreen" class="screen">
         <div class="container">
             <div class="header">
                 <h1>NUMBER HUNT</h1>
@@ -20,13 +19,65 @@
             </div>
             
             <div class="card text-center">
-                <h2 class="mb-2">Welcome to Number Hunt!</h2>
-                <p class="mb-3">Can you spot the player who doesn't know what everyone else is talking about?</p>
+                <h2 id="authTitle" class="mb-2">Login to Number Hunt</h2>
                 
-                <div class="flex flex-center gap-2">
-                    <button id="createRoomBtn" class="btn btn-primary">Create Room</button>
-                    <button id="joinRoomBtn" class="btn btn-secondary">Join Room</button>
-                </div>
+                <!-- Login Form -->
+                <form id="loginForm" class="auth-form">
+                    <div class="form-group">
+                        <label class="form-label" for="loginUsername">Username</label>
+                        <input type="text" id="loginUsername" name="username" class="form-input" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" name="password" class="form-input" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Login</button>
+                    
+                    <div class="auth-toggle">
+                        <p>Don't have an account? <button type="button" id="showRegisterBtn" class="btn-link">Create one</button></p>
+                    </div>
+                </form>
+                
+                <!-- Register Form -->
+                <form id="registerForm" class="auth-form hidden">
+                    <div class="form-group">
+                        <label class="form-label" for="registerUsername">Username</label>
+                        <input type="text" id="registerUsername" name="username" class="form-input" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="registerEmail">Email</label>
+                        <input type="email" id="registerEmail" name="email" class="form-input" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="registerFirstName">First Name (Optional)</label>
+                        <input type="text" id="registerFirstName" name="first_name" class="form-input">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="registerLastName">Last Name (Optional)</label>
+                        <input type="text" id="registerLastName" name="last_name" class="form-input">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="registerPassword">Password</label>
+                        <input type="password" id="registerPassword" name="password" class="form-input" required minlength="6">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="registerPasswordConfirm">Confirm Password</label>
+                        <input type="password" id="registerPasswordConfirm" name="password_confirm" class="form-input" required minlength="6">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Create Account</button>
+                    
+                    <div class="auth-toggle">
+                        <p>Already have an account? <button type="button" id="showLoginBtn" class="btn-link">Login</button></p>
+                    </div>
+                </form>
             </div>
             
             <div class="card">
@@ -52,24 +103,94 @@
         </div>
     </div>
 
+    <!-- Dashboard Screen -->
+    <div id="dashboardScreen" class="screen hidden">
+        <div class="container">
+            <div class="header">
+                <h1 id="userWelcome">Welcome!</h1>
+                <div class="user-actions">
+                    <button id="profileBtn" class="btn btn-secondary">Profile</button>
+                    <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+                </div>
+            </div>
+            
+            <!-- Current Room -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Current Game</h3>
+                </div>
+                <div id="currentRoom">
+                    <p>No active games</p>
+                </div>
+            </div>
+            
+            <!-- User Stats -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Your Stats</h3>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Games Played</span>
+                        <span class="stat-value" id="userTotalGames">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Games Won</span>
+                        <span class="stat-value" id="userTotalWins">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Score</span>
+                        <span class="stat-value" id="userTotalScore">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Win Rate</span>
+                        <span class="stat-value" id="userWinRate">0%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Game Actions -->
+            <div class="card text-center">
+                <h3 class="card-title">Start Playing</h3>
+                <div class="flex flex-center gap-2">
+                    <button id="createRoomBtn" class="btn btn-primary">Create Room</button>
+                    <button id="joinRoomBtn" class="btn btn-secondary">Join Room</button>
+                </div>
+                <div class="flex flex-center gap-2 mt-2">
+                    <button id="leaderboardBtn" class="btn btn-secondary">Leaderboard</button>
+                </div>
+            </div>
+            
+            <!-- Recent Games -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Recent Games</h3>
+                </div>
+                <div id="recentGames" class="recent-games-list">
+                    <!-- Recent games will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Room Screen -->
     <div id="createRoomScreen" class="screen hidden">
         <div class="container">
             <div class="header">
                 <h1>Create Room</h1>
-                <button class="btn btn-secondary back-btn">← Back to Menu</button>
+                <button class="btn btn-secondary back-btn">← Back to Dashboard</button>
             </div>
             
             <div class="card">
                 <form id="createRoomForm">
                     <div class="form-group">
-                        <label class="form-label" for="username">Your Username</label>
-                        <input type="text" id="username" name="username" class="form-input" placeholder="Enter your username" required>
+                        <label class="form-label" for="roomName">Room Name</label>
+                        <input type="text" id="roomName" name="roomName" class="form-input" placeholder="Enter room name" required>
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label" for="roomName">Room Name</label>
-                        <input type="text" id="roomName" name="roomName" class="form-input" placeholder="Enter room name" required>
+                        <label class="form-label" for="nickname">Your Nickname</label>
+                        <input type="text" id="createNickname" name="nickname" class="form-input" placeholder="Enter your display name">
                     </div>
                     
                     <div class="form-group">
@@ -95,6 +216,14 @@
                         </select>
                     </div>
                     
+                    <div class="form-group">
+                        <label class="form-checkbox">
+                            <input type="checkbox" name="isPrivate">
+                            <span class="checkmark"></span>
+                            Private Room (requires code to join)
+                        </label>
+                    </div>
+                    
                     <button type="submit" class="btn btn-primary">Create Room</button>
                 </form>
             </div>
@@ -106,9 +235,26 @@
         <div class="container">
             <div class="header">
                 <h1>Join Room</h1>
-                <button class="btn btn-secondary back-btn">← Back to Menu</button>
+                <button class="btn btn-secondary back-btn">← Back to Dashboard</button>
             </div>
             
+            <!-- Join by Code -->
+            <div class="card">
+                <h3 class="card-title">Join Private Room</h3>
+                <form id="joinByCodeForm">
+                    <div class="flex gap-1">
+                        <div class="form-group flex-1">
+                            <input type="text" name="roomCode" class="form-input" placeholder="Enter room code" maxlength="6">
+                        </div>
+                        <div class="form-group flex-1">
+                            <input type="text" name="nickname" class="form-input" placeholder="Your nickname">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Join</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Available Rooms -->
             <div class="card">
                 <h3 class="card-title">Available Rooms</h3>
                 <div id="availableRooms" class="mb-3">
@@ -121,13 +267,8 @@
                     <input type="hidden" id="selectedRoomId" name="roomId" required>
                     
                     <div class="form-group">
-                        <label class="form-label" for="joinUsername">Your Username</label>
-                        <input type="text" id="joinUsername" name="username" class="form-input" placeholder="Enter your username" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="nickname">Your Nickname</label>
-                        <input type="text" id="nickname" name="nickname" class="form-input" placeholder="Enter your display name" required>
+                        <label class="form-label" for="joinNickname">Your Nickname</label>
+                        <input type="text" id="joinNickname" name="nickname" class="form-input" placeholder="Enter your display name">
                     </div>
                     
                     <button type="submit" class="btn btn-primary">Join Selected Room</button>
@@ -136,34 +277,137 @@
         </div>
     </div>
 
+    <!-- Profile Screen -->
+    <div id="profileScreen" class="screen hidden">
+        <div class="container">
+            <div class="header">
+                <h1>Your Profile</h1>
+                <button class="btn btn-secondary back-btn">← Back to Dashboard</button>
+            </div>
+            
+            <!-- Profile Info -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Profile Information</h3>
+                </div>
+                <div class="profile-info">
+                    <div class="profile-item">
+                        <span class="profile-label">Username:</span>
+                        <span id="profileUsername" class="profile-value">-</span>
+                    </div>
+                    <div class="profile-item">
+                        <span class="profile-label">Email:</span>
+                        <span id="profileEmail" class="profile-value">-</span>
+                    </div>
+                    <div class="profile-item">
+                        <span class="profile-label">Member Since:</span>
+                        <span id="profileJoinDate" class="profile-value">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Detailed Stats -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Game Statistics</h3>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Total Games</span>
+                        <span class="stat-value" id="detailedTotalGames">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Wins</span>
+                        <span class="stat-value" id="detailedTotalWins">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Score</span>
+                        <span class="stat-value" id="detailedTotalScore">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Win Rate</span>
+                        <span class="stat-value" id="detailedWinRate">0%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Imposter Wins</span>
+                        <span class="stat-value" id="imposterWins">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Detective Wins</span>
+                        <span class="stat-value" id="detectiveWins">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Imposter Success</span>
+                        <span class="stat-value" id="imposterSuccessRate">0%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Game History -->
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Recent Game History</h3>
+                </div>
+                <div id="gameHistory" class="game-history">
+                    <!-- Game history will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaderboard Screen -->
+    <div id="leaderboardScreen" class="screen hidden">
+        <div class="container">
+            <div class="header">
+                <h1>Leaderboard</h1>
+                <button class="btn btn-secondary back-btn">← Back to Dashboard</button>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Top Players (All Time)</h3>
+                </div>
+                <div id="leaderboardList" class="leaderboard-list">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Lobby Screen -->
     <div id="lobbyScreen" class="screen hidden">
         <div class="container">
             <div class="header">
-                <h1 id="lobbyRoomName">Game Lobby</h1>
+                <h1 id="roomName">Game Lobby</h1>
                 <div class="room-info">
-                    <span>Players: <span id="lobbyPlayerCount">0/0</span></span>
+                    <span>Players: <span id="playerCount">0/0</span></span>
+                    <div class="room-code" id="roomCodeDisplay" style="display: none;">
+                        Room Code: <span id="roomCode"></span>
+                    </div>
                 </div>
             </div>
             
             <div class="card">
                 <div class="card-header">
                     <h3 class="card-title">Players in Room</h3>
-                    <button id="startGameBtn" class="btn btn-success hidden">Start Game</button>
+                    <button id="startGameBtn" class="btn btn-success" disabled>Start Game</button>
                 </div>
                 
-                <div id="lobbyPlayers" class="players-grid">
+                <div id="playersList" class="players-list">
                     <!-- Players will be populated here -->
                 </div>
                 
-                <div class="text-center">
+                <div class="text-center mt-3">
                     <p class="mb-2">Waiting for more players...</p>
                     <p><small>Need at least 3 players to start the game</small></p>
                 </div>
             </div>
             
-            <div class="text-center">
+            <div class="text-center mt-3">
                 <button class="btn btn-secondary back-btn">Leave Room</button>
+                <button id="closeRoomBtn" class="btn btn-danger ml-2" style="display: none;">Close Room</button>
             </div>
         </div>
     </div>
@@ -260,12 +504,12 @@
                     <!-- Final results will be displayed here -->
                 </div>
                 <div class="text-center">
-                    <button class="btn btn-primary back-btn">Play Again</button>
+                    <button class="btn btn-primary back-btn">Back to Dashboard</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="{% static 'js/app.js' %}"></script>
+    <script src="/static/js/app.js"></script>
 </body>
 </html>

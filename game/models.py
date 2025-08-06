@@ -1,7 +1,42 @@
 from django.db import models
-from django.contrib.auth.models import User
-import uuid
+from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
+import uuid
+
+
+class User(AbstractUser):
+    """Extended user model with game statistics"""
+    email = models.EmailField(unique=True)
+    total_games = models.IntegerField(default=0)
+    total_wins = models.IntegerField(default=0)
+    total_imposter_wins = models.IntegerField(default=0)
+    total_detective_wins = models.IntegerField(default=0)
+    total_score = models.IntegerField(default=0)
+    avatar = models.CharField(max_length=50, default='default')  # For avatar selection
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_active = models.DateTimeField(auto_now=True)
+    
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = ['email']
+    
+    @property
+    def win_rate(self):
+        if self.total_games == 0:
+            return 0
+        return (self.total_wins / self.total_games) * 100
+    
+    @property
+    def imposter_success_rate(self):
+        imposter_games = PlayerGameStats.objects.filter(
+            player__user=self, 
+            role='imposter'
+        ).count()
+        if imposter_games == 0:
+            return 0
+        return (self.total_imposter_wins / imposter_games) * 100
+    
+    def __str__(self):
+        return self.username
 
 
 class Question(models.Model):
@@ -55,9 +90,30 @@ class GameRoom(models.Model):
     max_players = models.IntegerField(default=8)
     current_round = models.IntegerField(default=0)
     total_rounds = models.IntegerField(default=5)
+    is_private = models.BooleanField(default=False)
+    room_code = models.CharField(max_length=6, unique=True, blank=True, null=True)  # For private rooms
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
+    
+    def generate_unique_room_code(self):
+        """Generate a unique room code that doesn't already exist"""
+        import random
+        import string
+        
+        max_attempts = 100  # Prevent infinite loop
+        for _ in range(max_attempts):
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            if not GameRoom.objects.filter(room_code=code).exists():
+                return code
+        
+        # If we can't find a unique code after max_attempts, use a longer code
+        return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    
+    def save(self, *args, **kwargs):
+        if self.is_private and not self.room_code:
+            self.room_code = self.generate_unique_room_code()
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"Room: {self.name} ({self.status})"
@@ -68,6 +124,22 @@ class GameRoom(models.Model):
     
     def can_start(self):
         return self.player_count >= 3 and self.status == 'waiting'
+    
+    def can_user_join(self, user):
+        """Check if a user can join this room"""
+        if self.status == 'finished':
+            return False
+        
+        # If user is already a player in this room, they can rejoin
+        if self.players.filter(user=user).exists():
+            return True
+            
+        # If game is in progress, no new players can join
+        if self.status == 'in_progress':
+            return False
+            
+        # If waiting and room not full, user can join
+        return self.player_count < self.max_players
 
 
 class Player(models.Model):
@@ -78,12 +150,18 @@ class Player(models.Model):
     score = models.IntegerField(default=0)
     is_connected = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
+    last_active = models.DateTimeField(auto_now=True)
     
     class Meta:
         unique_together = ['user', 'room']
     
     def __str__(self):
         return f"{self.nickname} in {self.room.name}"
+    
+    def update_activity(self):
+        """Update last active timestamp"""
+        self.last_active = timezone.now()
+        self.save(update_fields=['last_active'])
 
 
 class GameRound(models.Model):
@@ -143,11 +221,41 @@ class Vote(models.Model):
         return f"{self.voter.nickname} votes {self.accused.nickname}"
 
 
+class PlayerGameStats(models.Model):
+    """Individual player statistics for each game"""
+    ROLE_CHOICES = [
+        ('detective', 'Detective'),
+        ('imposter', 'Imposter'),
+    ]
+    
+    RESULT_CHOICES = [
+        ('win', 'Win'),
+        ('loss', 'Loss'),
+    ]
+    
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='game_stats')
+    room = models.ForeignKey(GameRoom, on_delete=models.CASCADE, related_name='player_stats')
+    round_number = models.IntegerField()
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    result = models.CharField(max_length=20, choices=RESULT_CHOICES)
+    points_earned = models.IntegerField(default=0)
+    was_voted_out = models.BooleanField(default=False)
+    correct_votes = models.IntegerField(default=0)  # For detectives
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['player', 'room', 'round_number']
+    
+    def __str__(self):
+        return f"{self.player.nickname} - Round {self.round_number} - {self.role} - {self.result}"
+
+
 class GameEvent(models.Model):
     """Events that happen during the game for logging/replay"""
     EVENT_TYPES = [
         ('player_joined', 'Player Joined'),
         ('player_left', 'Player Left'),
+        ('player_reconnected', 'Player Reconnected'),
         ('game_started', 'Game Started'),
         ('round_started', 'Round Started'),
         ('answer_submitted', 'Answer Submitted'),
@@ -169,3 +277,53 @@ class GameEvent(models.Model):
     
     def __str__(self):
         return f"{self.event_type} in {self.room.name}"
+
+
+class UserSession(models.Model):
+    """Track user sessions for reconnection"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
+    session_key = models.CharField(max_length=100, unique=True)
+    current_room = models.ForeignKey(GameRoom, on_delete=models.SET_NULL, null=True, blank=True)
+    last_activity = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Session for {self.user.username}"
+
+
+class Leaderboard(models.Model):
+    """Leaderboard entries for different time periods"""
+    PERIOD_CHOICES = [
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+        ('monthly', 'Monthly'),
+        ('all_time', 'All Time'),
+    ]
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    period = models.CharField(max_length=20, choices=PERIOD_CHOICES)
+    period_start = models.DateTimeField()
+    period_end = models.DateTimeField()
+    total_games = models.IntegerField(default=0)
+    total_wins = models.IntegerField(default=0)
+    total_score = models.IntegerField(default=0)
+    imposter_games = models.IntegerField(default=0)
+    imposter_wins = models.IntegerField(default=0)
+    detective_games = models.IntegerField(default=0)
+    detective_wins = models.IntegerField(default=0)
+    rank = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['user', 'period', 'period_start']
+        ordering = ['-total_score', '-total_wins']
+    
+    @property
+    def win_rate(self):
+        if self.total_games == 0:
+            return 0
+        return (self.total_wins / self.total_games) * 100
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.period} - Rank {self.rank}"
