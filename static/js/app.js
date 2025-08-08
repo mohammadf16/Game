@@ -222,9 +222,12 @@ class NumberHuntGame {
             await this.apiCall(`/api/rooms/${this.currentRoom.id}/submit-answer/`, 'POST', answerData);
             this.showNotification('Answer submitted!', 'success');
             
-            // Disable form
-            e.target.querySelector('input[type="number"]').disabled = true;
-            e.target.querySelector('button').disabled = true;
+            // Add a small delay before disabling form to prevent quick clearing
+            setTimeout(() => {
+                // Disable form
+                e.target.querySelector('input[type="number"]').disabled = true;
+                e.target.querySelector('button').disabled = true;
+            }, 1000);
             
         } catch (error) {
             console.error('Failed to submit answer:', error);
@@ -253,7 +256,12 @@ class NumberHuntGame {
                 accused_player_id: parseInt(selectedPlayer.value)
             };
             
-            const result = await this.apiCall(`/api/rooms/${this.currentRoom.id}/submit-vote/`, 'POST', voteData);
+            const response = await this.apiCall(`/api/rooms/${this.currentRoom.id}/submit-vote/`, 'POST', voteData);
+            if (!response.ok) {
+                throw new Error(response.statusText);
+            }
+            
+            const result = await response.json();
             this.showNotification('Vote submitted!', 'success');
             
             // Disable voting
@@ -269,6 +277,8 @@ class NumberHuntGame {
             
         } catch (error) {
             console.error('Failed to submit vote:', error);
+            // Show a more user-friendly error message
+            this.showNotification('Failed to submit vote. Please try again.', 'error');
         }
     }
     
@@ -363,6 +373,19 @@ class NumberHuntGame {
         // Update phase
         this.updateGamePhase();
         
+        // Reset answer form if we're in answering phase
+        if (this.currentRound.status === 'answering') {
+            const answerForm = document.getElementById('answerForm');
+            if (answerForm) {
+                // Reset and enable the form inputs
+                answerForm.reset();
+                const answerInput = answerForm.querySelector('input[type="number"]');
+                const submitButton = answerForm.querySelector('button');
+                if (answerInput) answerInput.disabled = false;
+                if (submitButton) submitButton.disabled = false;
+            }
+        }
+        
         // Update answers if available
         if (this.currentRound.answers && this.currentRound.answers.length > 0) {
             this.displayAnswers();
@@ -398,6 +421,7 @@ class NumberHuntGame {
                 phaseTitle.textContent = 'Discussion Phase';
                 phaseDescription.textContent = 'Discuss the answers and try to identify the imposter';
                 discussionSection?.classList.remove('hidden');
+                this.displayRevealedQuestions();
                 break;
                 
             case 'voting':
@@ -415,6 +439,73 @@ class NumberHuntGame {
         }
     }
     
+    displayRevealedQuestions() {
+        // Check if we have revealed questions from game events
+        this.fetchAndDisplayRevealedQuestions();
+    }
+    
+    async fetchAndDisplayRevealedQuestions() {
+        try {
+            const events = await this.apiCall(`/api/rooms/${this.currentRoom.id}/events/`);
+            const discussionEvent = events.find(event => event.event_type === 'discussion_started');
+            
+            if (discussionEvent && discussionEvent.data) {
+                const { question_text, decoy_question_text } = discussionEvent.data;
+                this.showRevealedQuestions(question_text, decoy_question_text);
+            }
+        } catch (error) {
+            console.error('Failed to fetch revealed questions:', error);
+        }
+    }
+    
+    showRevealedQuestions(questionText, decoyQuestionText) {
+        const answersContainer = document.getElementById('answersDisplay');
+        if (!answersContainer) return;
+        
+        // Create revealed questions section
+        const revealedQuestionsHtml = `
+            <div class="revealed-questions mb-3">
+                <h4 class="text-center mb-2">📝 Questions Revealed!</h4>
+                <div class="questions-reveal">
+                    <div class="question-box detective-question">
+                        <h5>🕵️ Detective Question (Real Question):</h5>
+                        <p>${questionText}</p>
+                    </div>
+                    <div class="question-box imposter-question">
+                        <h5>🎭 Imposter Question (Decoy Question):</h5>
+                        <p>${decoyQuestionText}</p>
+                    </div>
+                </div>
+                <div class="reveal-note">
+                    <p><strong>💡 Now you know:</strong> The imposter received the decoy question while detectives got the real question!</p>
+                </div>
+            </div>
+        `;
+        
+        // Add revealed questions before answers
+        answersContainer.innerHTML = revealedQuestionsHtml + '<h3>Submitted Answers:</h3>';
+        
+        // Add answers if available
+        if (this.currentRound.answers && this.currentRound.answers.length > 0) {
+            const answersGrid = document.createElement('div');
+            answersGrid.className = 'answers-with-names';
+            
+            const sortedAnswers = [...this.currentRound.answers].sort((a, b) => a.answer - b.answer);
+            
+            sortedAnswers.forEach(answer => {
+                const answerCard = document.createElement('div');
+                answerCard.className = 'answer-card-discussion';
+                answerCard.innerHTML = `
+                    <div class="answer-number-large">${answer.answer}</div>
+                    <div class="answer-player-name">${answer.player.nickname}</div>
+                `;
+                answersGrid.appendChild(answerCard);
+            });
+            
+            answersContainer.appendChild(answersGrid);
+        }
+    }
+
     displayAnswers() {
         const answersContainer = document.getElementById('answersDisplay');
         if (!answersContainer || !this.currentRound.answers) return;
@@ -465,6 +556,12 @@ class NumberHuntGame {
             
             votingContainer.appendChild(voteOption);
         });
+        
+        // Ensure submit vote button is enabled when displaying voting options
+        const submitVoteBtn = document.getElementById('submitVoteBtn');
+        if (submitVoteBtn) {
+            submitVoteBtn.disabled = false;
+        }
     }
     
     async loadRoundResults() {

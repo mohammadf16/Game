@@ -77,6 +77,8 @@ class Player(models.Model):
     nickname = models.CharField(max_length=50)
     score = models.IntegerField(default=0)
     is_connected = models.BooleanField(default=True)
+    has_submitted_answer = models.BooleanField(default=False)
+    has_voted = models.BooleanField(default=False)
     joined_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

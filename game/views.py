@@ -75,7 +75,9 @@ def create_room(request):
         Player.objects.create(
             user=user,
             room=room,
-            nickname=username  # Use username as nickname for host
+            nickname=username,  # Use username as nickname for host
+            has_submitted_answer=False,
+            has_voted=False
         )
         
         # Create game event
@@ -132,7 +134,9 @@ def join_room(request, room_id):
     player = Player.objects.create(
         user=user,
         room=room,
-        nickname=nickname
+        nickname=nickname,
+        has_submitted_answer=False,
+        has_voted=False
     )
     
     # Create game event
@@ -183,9 +187,35 @@ def start_round(room, round_number):
     if not question or not decoy_question:
         raise ValueError("No questions available")
     
-    # Select random imposter
+    # Select random imposter, ensuring it's not the same as the previous round
     players = list(room.players.filter(is_connected=True))
-    imposter = random.choice(players)
+    
+    if round_number > 1:
+        # Get the previous round's imposter
+        try:
+            previous_round = GameRound.objects.get(room=room, round_number=round_number-1)
+            previous_imposter = previous_round.imposter
+            
+            # Create a list of players excluding the previous imposter
+            eligible_players = [player for player in players if player != previous_imposter]
+            
+            # If we have eligible players, select from them; otherwise, select from all players
+            if eligible_players:
+                imposter = random.choice(eligible_players)
+            else:
+                imposter = random.choice(players)
+        except GameRound.DoesNotExist:
+            # If previous round doesn't exist, select randomly from all players
+            imposter = random.choice(players)
+    else:
+        # For the first round, select randomly from all players
+        imposter = random.choice(players)
+    
+    # Reset player states for the new round
+    for player in players:
+        player.has_submitted_answer = False
+        player.has_voted = False
+        player.save()
     
     # Create round
     game_round = GameRound.objects.create(
@@ -274,6 +304,10 @@ def submit_answer(request, room_id):
         defaults={'answer': serializer.validated_data['answer']}
     )
     
+    # Mark player as having submitted answer
+    player.has_submitted_answer = True
+    player.save()
+    
     # Create game event
     GameEvent.objects.create(
         room=room,
@@ -295,7 +329,11 @@ def submit_answer(request, room_id):
         GameEvent.objects.create(
             room=room,
             event_type='discussion_started',
-            data={'total_answers': answered_players}
+            data={
+                'total_answers': answered_players,
+                'question_text': game_round.question.text,
+                'decoy_question_text': game_round.decoy_question.text
+            }
         )
     
     return Response({'success': True, 'answer_id': answer.id})
@@ -328,64 +366,72 @@ def start_voting(request, room_id):
 @permission_classes([AllowAny])
 def submit_vote(request, room_id):
     """Submit vote for who is the imposter"""
-    room = get_object_or_404(GameRoom, id=room_id)
-    game_round = get_object_or_404(GameRound, room=room, round_number=room.current_round)
-    
-    if game_round.status != 'voting':
-        return Response({'error': 'Not in voting phase'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    username = request.data.get('username')
-    if not username:
-        return Response({'error': 'Username is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
     try:
-        user = User.objects.get(username=username)
-        voter = Player.objects.get(user=user, room=room)
-    except (User.DoesNotExist, Player.DoesNotExist):
-        return Response({'error': 'Player not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    serializer = SubmitVoteSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        accused = Player.objects.get(id=serializer.validated_data['accused_player_id'], room=room)
-    except Player.DoesNotExist:
-        return Response({'error': 'Accused player not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    if voter == accused:
-        return Response({'error': 'Cannot vote for yourself'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Create or update vote
-    vote, created = Vote.objects.update_or_create(
-        round=game_round,
-        voter=voter,
-        defaults={'accused': accused}
-    )
-    
-    # Create game event
-    GameEvent.objects.create(
-        room=room,
-        event_type='vote_submitted',
-        player=voter,
-        data={'accused_id': accused.id}
-    )
-    
-    # Check if all players have voted
-    total_players = room.players.filter(is_connected=True).count()
-    voted_players = game_round.votes.count()
-    
-    if voted_players >= total_players:
-        # Calculate results and end round
-        results = end_round(game_round)
-        return Response({
-            'success': True, 
-            'vote_id': vote.id,
-            'voting_complete': True,
-            'results': results
-        })
-    
-    return Response({'success': True, 'vote_id': vote.id, 'voting_complete': False})
+        room = get_object_or_404(GameRoom, id=room_id)
+        game_round = get_object_or_404(GameRound, room=room, round_number=room.current_round)
+        
+        if game_round.status != 'voting':
+            return Response({'error': 'Not in voting phase'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        username = request.data.get('username')
+        if not username:
+            return Response({'error': 'Username is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = User.objects.get(username=username)
+            voter = Player.objects.get(user=user, room=room)
+        except (User.DoesNotExist, Player.DoesNotExist):
+            return Response({'error': 'Player not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = SubmitVoteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            accused = Player.objects.get(id=serializer.validated_data['accused_player_id'], room=room)
+        except Player.DoesNotExist:
+            return Response({'error': 'Accused player not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if voter == accused:
+            return Response({'error': 'Cannot vote for yourself'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create or update vote
+        vote, created = Vote.objects.update_or_create(
+            round=game_round,
+            voter=voter,
+            defaults={'accused': accused}
+        )
+        
+        # Mark player as having voted
+        voter.has_voted = True
+        voter.save()
+        
+        # Create game event
+        GameEvent.objects.create(
+            room=room,
+            event_type='vote_submitted',
+            player=voter,
+            data={'accused_id': accused.id}
+        )
+        
+        # Check if all players have voted
+        total_players = room.players.filter(is_connected=True).count()
+        voted_players = game_round.votes.count()
+        
+        if voted_players >= total_players:
+            # Calculate results and end round
+            results = end_round(game_round)
+            return Response({
+                'success': True, 
+                'vote_id': vote.id,
+                'voting_complete': True,
+                'results': results
+            })
+        
+        return Response({'success': True, 'vote_id': vote.id, 'voting_complete': False})
+    except Exception as e:
+        # Ensure we always return JSON even in case of unexpected errors
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 def end_round(game_round):
@@ -474,6 +520,18 @@ def continue_to_next_round(request, room_id):
     """Continue from results to next round or end game"""
     room = get_object_or_404(GameRoom, id=room_id)
     
+    # Ensure we're in the results phase before continuing
+    if room.status != 'in_progress':
+        return Response({'error': 'Game is not in progress'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Get the current round to make sure it's in results phase
+    try:
+        current_round = GameRound.objects.get(room=room, round_number=room.current_round)
+        if current_round.status != 'results':
+            return Response({'error': 'Current round is not in results phase'}, status=status.HTTP_400_BAD_REQUEST)
+    except GameRound.DoesNotExist:
+        return Response({'error': 'Current round not found'}, status=status.HTTP_404_NOT_FOUND)
+    
     if room.current_round >= room.total_rounds:
         # End game
         room.status = 'finished'
@@ -491,6 +549,13 @@ def continue_to_next_round(request, room_id):
         # Start next round
         room.current_round += 1
         room.save()
+
+        # Reset player states for the new round
+        for player in room.players.all():
+            player.has_submitted_answer = False
+            player.has_voted = False
+            player.save()
+
         start_round(room, room.current_round)
         
         return Response({'next_round': room.current_round})

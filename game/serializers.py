@@ -92,6 +92,9 @@ class GameEventSerializer(serializers.ModelSerializer):
     class Meta:
         model = GameEvent
         fields = ['id', 'event_type', 'player', 'data', 'timestamp']
+        extra_kwargs = {
+            'data': {'required': False}
+        }
 
 
 class JoinRoomSerializer(serializers.Serializer):
