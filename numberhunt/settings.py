@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-cz7-_(4e+rqo@89o%9u9xj(vn^ge-ke75-68r+6so754xm4)r0
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['192.168.1.37', '0.0.0.0', '127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['cdn.oxalisys.com', 'www.cdn.oxalisys.com', '0.0.0.0', '127.0.0.1', 'localhost']
 
 
 # Application definition
@@ -110,25 +110,38 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+FORCE_SCRIPT_NAME = '/game'
 
 USE_I18N = True
+
+USE_L10N = True
 
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+# Static files (CSS, JavaScript, Images)
+
+# https://docs.djangoproject.com/en/4.2/howto/static-files/STATIC_URL = '/game/static/'
+
+STATIC_URL = '/game/static/'
+
+STATIC_ROOT = '/home/ubuntu/Game/static/'
+
+#STATICFILES_DIRS = [BASE_DIR / 'static']
 
 # CORS settings
+
 CORS_ALLOWED_ORIGINS = [
+
     "http://localhost:3000",
+
     "http://127.0.0.1:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
+
+    "http://localhost:8070",
+
+    "http://127.0.0.1:8070",
+
 ]
 
 CORS_ALLOW_CREDENTIALS = True

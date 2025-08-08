@@ -39,7 +39,7 @@ class NumberHuntGame {
     
     // API Methods
     async apiCall(endpoint, method = 'GET', data = null) {
-        const url = endpoint;
+        const url = `/game${endpoint}`; 
         const options = {
             method,
             headers: {
